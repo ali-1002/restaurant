@@ -1,5 +1,6 @@
 from django.contrib import admin
 from .models import User, Otp, Admin
+from django.contrib.auth.hashers import make_password
 
 
 @admin.register(User)
@@ -23,3 +24,8 @@ class AdminAdmin(admin.ModelAdmin):
     search_fields = ('username', 'first_name', 'last_name', 'phone_number')
     list_filter = ('status', 'created_at')
     ordering = ('-created_at',)
+
+    def save_model(self, request, obj, form, change):
+        if 'password' in form.changed_data:
+            obj.password = make_password(obj.password)
+        super().save_model(request, obj, form, change)
