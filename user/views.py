@@ -8,7 +8,8 @@ from drf_yasg.utils import swagger_auto_schema
 from datetime import timedelta
 from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
-from django.contrib.auth.hashers import make_password
+from django.contrib.auth.hashers import make_password, check_password
+from .utils import send_telegram_message, BOT_TOKEN, CHAT_ID
 
 
 @swagger_auto_schema(method='POST',
@@ -19,17 +20,16 @@ from django.contrib.auth.hashers import make_password
 @api_view(["POST"])
 def registration(request):
     data = request.data
-    print(data)
     if 'password' in data:
         data['password'] = make_password(data['password'])
     user = User.objects.filter(username=data['username']).first()
-    print(user)
     if user and not user.is_verify:
         serializers = UserSerializer(user, data=data, partial=True)
         if serializers.is_valid():
             user = serializers.save()
             otp_code_new = random.randint(100000, 999999)
             print(otp_code_new)
+            send_telegram_message(BOT_TOKEN, CHAT_ID, otp_code_new)
             otp = Otp.objects.create(user=user, otp_code = otp_code_new)
             otp.save()
             return Response({'otp key': otp.otp_key}, status=status.HTTP_201_CREATED)
@@ -38,7 +38,7 @@ def registration(request):
         return Response({'message': 'User yaratilgan'}, status=status.HTTP_400_BAD_REQUEST)
     user = serializers.save()
     otp_code_new = random.randint(100000, 999999)
-    print(otp_code_new)
+    send_telegram_message(BOT_TOKEN, CHAT_ID, otp_code_new)
     otp = Otp.objects.create(user=user, otp_code = otp_code_new)
     otp.save()
     return Response({'otp_key': otp.otp_key}, status=status.HTTP_201_CREATED)
@@ -106,18 +106,24 @@ def resend_otp(request):
 @api_view(['POST'])
 def login(request):
     serializer = LoginSerializer(data=request.data)
-    if serializer.is_valid():
-        username = serializer.validated_data['username']
-        user = User.objects.filter(username=username).first() or Admin.objects.filter(username=username).first()
-        if not user:
-            return Response({'error': 'Foydalanuvchi topilmadi yoki parol noto‘g‘ri'}, status=status.HTTP_401_UNAUTHORIZED)
-        refresh = RefreshToken.for_user(user)
-        access = refresh.access_token
-        access['role'] = getattr(user, 'role', None)
-        access['first_name'] = getattr(user, 'first_name', None)
-        access['last_name'] = getattr(user, 'last_name', None)
-        return Response({
-            'access_token': str(access),
-            'refresh_token': str(refresh),
-        }, status=status.HTTP_200_OK)
-    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+    username = request.data.get('username')
+    password = request.data.get('password')
+    user = User.objects.filter(username=username).first() or Admin.objects.filter(username=username).first()
+    if not user:
+        return Response({'error': 'Foydalanuvchi topilmadi yoki parol noto‘g‘ri'}, status=status.HTTP_401_UNAUTHORIZED)
+    print(user)
+    print(user.password)
+    print(make_password(password))
+    if user.password != make_password(password):
+        return Response({'error': 'Foydalanuvchi topilmadi yoki parol noto‘g‘ri'}, status=status.HTTP_401_UNAUTHORIZED)
+    refresh = RefreshToken.for_user(user)
+    access = refresh.access_token
+    access['role'] = getattr(user, 'role', None)
+    access['first_name'] = getattr(user, 'first_name', None)
+    access['last_name'] = getattr(user, 'last_name', None)
+    return Response({
+        'access_token': str(access),
+        'refresh_token': str(refresh),
+    }, status=status.HTTP_200_OK)

@@ -127,16 +127,27 @@ def delete_diningspace(request, pk):
                      tags=['DiningSpace CRUD'],
                      )
 @api_view(['GET'])
-def list_diningspace(request):
-    diningspaces = DiningSpace.objects.filter(status=1)
+def listt_diningspace(request, **kwargs):
+    pk = kwargs['pk']
+    if not(pk in [0, 1]):
+        return Response({"error": "Bu ID larda ma'lumot mavjud  emas"})
+    diningspaces = DiningSpace.objects.filter(status=1, type=kwargs['pk'])
     if not diningspaces:
         return Response({'error': 'DiningSpace topilmadi'}, status=status.HTTP_404_NOT_FOUND)
     serializer = DiningSpaceSerializer(diningspaces, many=True)
     return Response(serializer.data)
 
+
+@swagger_auto_schema(method='GET',
+                     responses={200: DiningSpaceSerializer(many=True)},
+                     tags=['DiningSpace CRUD'],
+                     )
 @api_view(['GET'])
-def listt_diningspace(request):
-    diningspaces = DiningSpace.objects.all()
+def list_diningspace(request, **kwargs):
+    pk = kwargs['pk']
+    if not(pk in [0, 1]):
+        return Response({"error": "Bu ID larda ma'lumot mavjud  emas"})
+    diningspaces = DiningSpace.objects.filter(type=kwargs['pk'])
     if not diningspaces:
         return Response({'error': 'DiningSpace topilmadi'}, status=status.HTTP_404_NOT_FOUND)
     serializer = DiningSpaceSerializer(diningspaces, many=True)

@@ -42,7 +42,8 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'restaurant.middleware.CreateRestaurantMiddleware',
+    'restaurant.middleware.CRUDMiddleware',
+    'restaurant.middleware.ListDiningSpaceMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'
