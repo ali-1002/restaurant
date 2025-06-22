@@ -3,7 +3,7 @@ from rest_framework.response import Response
 from rest_framework import status
 from datetime import time, datetime, timedelta
 from .serializers import (RestaurantSerializer, DiningSpaceSerializer, ProductSerializer,
-                          OrderSerializer, OrderItemSerializer, OrderUpdateSerializer)
+                          OrderSerializer, OrderItemSerializer, OrderUpdateSerializer, OrderListSerializer)
 from user.models import User
 from drf_yasg.utils import swagger_auto_schema
 from .models import Restaurant, DiningSpace, Product, Order, OrderItem
@@ -432,7 +432,7 @@ def delete_order(request, pk):
 
 @swagger_auto_schema(
     method='GET',
-    responses={200: OrderSerializer(many=True)},
+    responses={200: OrderListSerializer(many=True)},
     tags=['Order CRUD'],
 )
 @api_view(['GET'])
@@ -443,12 +443,12 @@ def order_listt(request):
     orders = Order.objects.filter(customer_id=user_id)
     if not orders.exists():
         return Response({'message': 'Sizda mavjud buyurtmalar yo‘q'}, status=status.HTTP_200_OK)
-    serializer = OrderSerializer(orders, many=True)
+    serializer = OrderListSerializer(orders, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
 
 @swagger_auto_schema(
     method='GET',
-    responses={200: OrderSerializer(many=True)},
+    responses={200: OrderListSerializer(many=True)},
     tags=['Order CRUD'],
 )
 @api_view(['GET'])
@@ -459,5 +459,110 @@ def order_list(request):
     orders = Order.objects.all()
     if not orders.exists():
         return Response({'message': 'Hozircha buyurtmalar yo‘q'}, status=status.HTTP_200_OK)
-    serializer = OrderSerializer(orders, many=True)
+    serializer = OrderListSerializer(orders, many=True)
     return Response(serializer.data, status=status.HTTP_200_OK)
+
+@swagger_auto_schema(
+    method='POST',
+    request_body=OrderItemSerializer,
+    responses={201: OrderItemSerializer()},
+    tags=['Order Item CRUD'],
+)
+@api_view(['POST'])
+def create_order_item(request):
+    user_id = getattr(request, 'user_id', None)  # Token orqali foydalanuvchini olish
+    if not user_id:
+        return Response({'error': 'Foydalanuvchi ID topilmadi'}, status=status.HTTP_401_UNAUTHORIZED)
+    data = request.data
+    order_id = data.get('order')
+    if not order_id or not Order.objects.filter(id=order_id, customer_id=user_id).exists():
+        return Response({'error': 'Buyurtma mavjud emas yoki ruxsat yo‘q'}, status=status.HTTP_403_FORBIDDEN)
+    product_id = data.get('product')
+    quantity = data.get('quantity', 1)
+    if not product_id or not Product.objects.filter(id=product_id).exists():
+        return Response({'error': 'Mahsulot topilmadi'}, status=status.HTTP_404_NOT_FOUND)
+    product = Product.objects.get(id=product_id)
+    discount_percent = product.discount_percent or 0
+    discounted_price = product.price * (1 - discount_percent / 100)
+    total_price = discounted_price * quantity
+    serializer = OrderItemSerializer(data=data)
+    if serializer.is_valid():
+        order_item = serializer.save(total_price=total_price)
+        return Response(OrderItemSerializer(order_item).data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+@swagger_auto_schema(
+    method='GET',
+    responses={200: OrderItemSerializer(many=True)},
+    tags=['Order Item CRUD'],
+)
+@api_view(['GET'])
+def list_order_items(request):
+    user_id = getattr(request, 'user_id', None)
+    if not user_id:
+        return Response({'error': 'Foydalanuvchi ID topilmadi'}, status=status.HTTP_401_UNAUTHORIZED)
+    order_items = OrderItem.objects.filter(order__customer_id=user_id)
+    if not order_items.exists():
+        return Response({'message': 'Hozircha buyurtma elementlari yo‘q'}, status=status.HTTP_200_OK)
+    serializer = OrderItemSerializer(order_items, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+@swagger_auto_schema(
+    method='GET',
+    responses={200: OrderItemSerializer(many=True)},
+    tags=['Order Item CRUD'],
+)
+@api_view(['GET'])
+def list_order_item(request):
+    user_id = getattr(request, 'user_id', None)
+    if not user_id:
+        return Response({'error': 'Foydalanuvchi ID topilmadi'}, status=status.HTTP_401_UNAUTHORIZED)
+    order_items = OrderItem.objects.all()
+    if not order_items.exists():
+        return Response({'message': 'Hozircha buyurtma elementlari yo‘q'}, status=status.HTTP_200_OK)
+    serializer = OrderItemSerializer(order_items, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+@swagger_auto_schema(
+    method='PUT',
+    request_body=OrderItemSerializer,
+    responses={200: OrderItemSerializer()},
+    tags=['Order Item CRUD'],
+)
+@api_view(['PUT'])
+def update_order_item(request, pk):
+    user_id = getattr(request, 'user_id', None)
+    if not user_id:
+        return Response({'error': 'Foydalanuvchi ID topilmadi'}, status=status.HTTP_401_UNAUTHORIZED)
+    order_item = OrderItem.objects.filter(id=pk, order__customer_id=user_id).first()
+    if not order_item:
+        return Response({'error': 'Buyurtma elementi mavjud emas yoki ruxsat yo‘q'}, status=status.HTTP_403_FORBIDDEN)
+    serializer = OrderItemSerializer(order_item, data=request.data, partial=True)
+    if serializer.is_valid():
+        updated_item = serializer.save()
+        product = updated_item.product
+        discount_percent = product.discount_percent
+        discounted_price = product.price * (1 - discount_percent / 100)
+        updated_item.total_price = discounted_price * updated_item.quantity
+        updated_item.save()
+        response_data = serializer.data
+        response_data['total_price'] = updated_item.total_price
+        return Response(response_data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+@swagger_auto_schema(
+    method='DELETE',
+    responses={204: 'OrderItem deleted successfully'},
+    tags=['Order Item CRUD'],
+)
+@api_view(['DELETE'])
+def delete_order_item(request, pk):
+    user_id = getattr(request, 'user_id', None)
+    if not user_id:
+        return Response({'error': 'Foydalanuvchi ID topilmadi'}, status=status.HTTP_401_UNAUTHORIZED)
+    order_item = OrderItem.objects.filter(id=pk, order__customer_id=user_id).first()
+    if not order_item:
+        return Response({'error': 'Buyurtma elementi mavjud emas yoki ruxsat yo‘q'}, status=status.HTTP_403_FORBIDDEN)
+    order_item.delete()
+    return Response({'message': 'OrderItem muvaffaqiyatli o‘chirildi'}, status=status.HTTP_204_NO_CONTENT)

@@ -30,8 +30,14 @@ class OrderUpdateSerializer(serializers.ModelSerializer):
         model = Order
         fields = ['id', 'dining_space', 'start_time', 'end_time']
 
-
 class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
-        fields = ['id', 'order', 'product', 'quantity', 'comment']
+        fields = ['id', 'order', 'product', 'quantity', 'comment', 'total_price']
+        read_only_fields = ['total_price']
+
+class OrderListSerializer(serializers.ModelSerializer):
+    items = OrderItemSerializer(many=True, read_only=True, source='order_items')
+    class Meta:
+        model = Order
+        fields = ['id', 'customer', 'dining_space', 'start_time', 'end_time', 'items']

@@ -4,7 +4,8 @@ from django.utils.deprecation import MiddlewareMixin
 from .validate_token import get_role, get_user_id
 from .views import (create_restaurnat, listt_diningspace, list_diningspace, update_restaurnat, delete_restaurnat,
                     create_product, update_product, delete_product, create_diningspace, update_diningspace,
-                    delete_diningspace, create_order, update_order, delete_order, order_list, order_listt)
+                    delete_diningspace, create_order, update_order, delete_order, order_list, order_listt,
+                    create_order_item, list_order_items, delete_order_item, update_order_item, list_order_item)
 
 
 def validate_request(request):
@@ -110,5 +111,32 @@ class OrderCrudMiddleware(MiddlewareMixin):
             if path[2] == 'list':
                 return order_list(request, *view_args, **view_kwargs)
         return None
+
+class OrderItemCrudMiddleware(MiddlewareMixin):
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        path = request.path.split('/')
+        if path[1] != 'orderitem':
+            return None
+        error_response, data, token = validate_request(request)
+        if error_response:
+            return error_response
+        role = get_role(token)
+        user_id = get_user_id(token)
+        request.user_id = user_id
+        request.user_role = role
+        if role == 'user':
+            if path[2] == 'create':
+                return create_order_item(request, *view_args, **view_kwargs)
+            if path[2] == 'update':
+                return update_order_item(request, *view_args, **view_kwargs)
+            if path[2] == 'delete':
+                return delete_order_item(request, *view_args, **view_kwargs)
+            if path[2] == 'list':
+                return list_order_items(request, *view_args, **view_kwargs)
+        if role == 'admin':
+            if path[2] == 'list':
+                return list_order_item(request, *view_args, **view_kwargs)
+        return None
+
 
 

@@ -45,6 +45,7 @@ MIDDLEWARE = [
     'restaurant.middleware.CRUDMiddleware',
     'restaurant.middleware.ListDiningSpaceMiddleware',
     'restaurant.middleware.OrderCrudMiddleware',
+    'restaurant.middleware.OrderItemCrudMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'

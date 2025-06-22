@@ -2,7 +2,8 @@ from django.urls import path
 from .views import (create_restaurnat, update_restaurnat, delete_restaurnat, list_restaurnat, detail_restaurnat,
                     create_diningspace, update_diningspace, delete_diningspace, list_diningspace,
                     detail_diningspace, create_product, update_product, delete_product, list_product,
-                    detail_product, create_order, update_order, delete_order, order_listt)
+                    detail_product, create_order, update_order, delete_order, order_listt, create_order_item,
+                    update_order_item, delete_order_item, list_order_items)
 
 urlpatterns = [
     path('crud/restaurant/create/', create_restaurnat, name='create_restaurant'),
@@ -24,5 +25,9 @@ urlpatterns = [
     path('order/update/<int:pk>/', update_order, name='update_order'),
     path('order/delete/<int:pk>/', delete_order, name='delete_order'),
     path('order/list/', order_listt, name='list_product'),
+    path('orderitem/create/', create_order_item, name='create_order_item'),
+    path('orderitem/update/<int:pk>/', update_order_item, name='update_order_item'),
+    path('orderitem/delete/<int:pk>/', delete_order_item, name='delete_order_item'),
+    path('orderitem/list/', list_order_items, name='list_order_items'),
 
 ]
