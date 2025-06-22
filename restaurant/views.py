@@ -1,9 +1,14 @@
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from rest_framework import status
-from .serializers import RestaurantSerializer, DiningSpaceSerializer, ProductSerializer
+from datetime import time, datetime, timedelta
+from .serializers import (RestaurantSerializer, DiningSpaceSerializer, ProductSerializer,
+                          OrderSerializer, OrderItemSerializer, OrderUpdateSerializer)
+from user.models import User
 from drf_yasg.utils import swagger_auto_schema
-from .models import Restaurant, DiningSpace, Product
+from .models import Restaurant, DiningSpace, Product, Order, OrderItem
+from django.utils import timezone
+from user.utils import send_telegram_messagee, CHAT_ID
 
 @swagger_auto_schema(method='POST',
                      request_body=RestaurantSerializer,
@@ -129,6 +134,9 @@ def delete_diningspace(request, pk):
 @api_view(['GET'])
 def listt_diningspace(request, **kwargs):
     pk = kwargs['pk']
+    user_id = getattr(request, 'user_id', None)
+    userr = User.objects.filter(id=user_id).values('id', 'username', 'first_name', 'last_name', 'password').first()
+    print(userr)
     if not(pk in [0, 1]):
         return Response({"error": "Bu ID larda ma'lumot mavjud  emas"})
     diningspaces = DiningSpace.objects.filter(status=1, type=kwargs['pk'])
@@ -233,3 +241,223 @@ def list_product(request):
     serializer = ProductSerializer(products, many=True)
     return Response(serializer.data)
 
+
+
+@swagger_auto_schema(
+    method='POST',
+    request_body=OrderSerializer,
+    responses={201: OrderSerializer(many=True)},
+    tags=['Order CRUD'],
+)
+@api_view(['POST'])
+def create_order(request):
+    user_id = getattr(request, 'user_id', None)
+    if not user_id:
+        return Response({'xato': 'Foydalanuvchi ID topilmadi'}, status=status.HTTP_401_UNAUTHORIZED)
+    customer = User.objects.filter(id=user_id).first()
+    if not customer:
+        return Response({'xato': 'Foydalanuvchi mavjud emas'}, status=status.HTTP_404_NOT_FOUND)
+    data = request.data
+    dining_space_id = data.get('dining_space')
+    start_time_str = data.get('start_time')
+    end_time_str = data.get('end_time')
+    if not dining_space_id or not start_time_str:
+        return Response({'xato': 'Dining space ID va boshlanish vaqti kiritilishi shart'}, status=status.HTTP_400_BAD_REQUEST)
+    if not DiningSpace.objects.filter(id=dining_space_id).exists():
+        return Response({'xato': 'Dining space mavjud emas'}, status=status.HTTP_404_NOT_FOUND)
+    dining_space = DiningSpace.objects.get(id=dining_space_id)
+    restaurant = dining_space.restaurant
+    def is_valid_time(time_str):
+        if not isinstance(time_str, str) or len(time_str) != 5 or time_str[2] != ':':
+            return False
+        hours, minutes = time_str.split(':')
+        if not (hours.isdigit() and minutes.isdigit()):
+            return False
+        hours, minutes = int(hours), int(minutes)
+        return 0 <= hours <= 23 and 0 <= minutes <= 59
+    if not is_valid_time(start_time_str):
+        return Response({'xato': 'Noto‘g‘ri boshlanish vaqti formati. HH:MM shaklida kiriting'}, status=status.HTTP_400_BAD_REQUEST)
+    if end_time_str and not is_valid_time(end_time_str):
+        return Response({'xato': 'Noto‘g‘ri tugash vaqti formati. HH:MM shaklida kiriting'}, status=status.HTTP_400_BAD_REQUEST)
+    start_hours, start_minutes = map(int, start_time_str.split(':'))
+    start_time = time(start_hours, start_minutes)
+    end_time = None
+    if end_time_str:
+        end_hours, end_minutes = map(int, end_time_str.split(':'))
+        end_time = time(end_hours, end_minutes)
+    current_time = timezone.now().time()  # Asia/Tashkent vaqtida (USE_TZ = False)
+    if start_time < restaurant.opening_time:
+        return Response({'xato': f'Restoran {restaurant.opening_time.strftime("%H:%M")} da ochiladi'}, status=status.HTTP_400_BAD_REQUEST)
+    if end_time and end_time > restaurant.closing_time:
+        return Response({'xato': f'Restoran {restaurant.closing_time.strftime("%H:%M")} da yopiladi'}, status=status.HTTP_400_BAD_REQUEST)
+    if end_time and start_time > end_time:
+        return Response({'xato': 'Boshlanish vaqti tugash vaqtidan keyin bo‘lishi mumkin emas'}, status=status.HTTP_400_BAD_REQUEST)
+    if start_time < current_time:
+        return Response({'xato': f'Boshlanish vaqti joriy vaqtdan ({current_time.strftime("%H:%M")}) oldin bo‘lishi mumkin emas'}, status=status.HTTP_400_BAD_REQUEST)
+    overlapping_orders = Order.objects.filter(
+        dining_space=dining_space,
+        start_time__lte=end_time if end_time else start_time,
+        end_time__gte=max(start_time, current_time)  # start_time va current_time dan kattasini tanlaymiz
+    ).distinct()
+    if overlapping_orders.exists():
+        time_ranges = [f"{order.start_time.strftime('%H:%M')} dan {order.end_time.strftime('%H:%M')} gacha" for order in overlapping_orders if order.end_time]
+        return Response({'xato': f'Dining space quyidagi vaqt oralig‘larida band qilingan: {", ".join(time_ranges)}'}, status=status.HTTP_400_BAD_REQUEST)
+    order_data = {
+        'customer': customer.id,
+        'dining_space': dining_space.id,
+        'start_time': start_time,
+        'end_time': end_time
+    }
+    serializer = OrderSerializer(data=order_data)
+    if serializer.is_valid():
+        order = serializer.save()
+        if start_time <= current_time <= (end_time if end_time else start_time):
+            dining_space.status = 0
+        else:
+            dining_space.status = 1
+        dining_space.save()
+        time_range = f"{start_time.strftime('%H:%M')}"
+        if end_time:
+            time_range += f" dan {end_time.strftime('%H:%M')} gacha"
+        user_message = (
+            f"Hurmatli {customer.first_name} {customer.last_name}, "
+            f"siz {time_range} vaqt oralig‘ida restoran joyini buyurtma qildingiz."
+        )
+        send_telegram_messagee(CHAT_ID, user_message)
+        admin_message = (
+            f"ADMIN: {customer.first_name} {customer.last_name} tomonidan "
+            f"{time_range} vaqt oralig‘ida zakas qilindi."
+        )
+        send_telegram_messagee(CHAT_ID, admin_message)
+    return Response(serializer.data, status=status.HTTP_201_CREATED)
+
+@swagger_auto_schema(
+    method='PUT',
+    request_body=OrderUpdateSerializer,
+    responses={200: OrderUpdateSerializer()},
+    tags=['Order CRUD'],
+)
+@api_view(['PUT'])
+def update_order(request, pk):
+    user_id = getattr(request, 'user_id', None)
+    if not user_id:
+        return Response({'error': 'Foydalanuvchi ID topilmadi'}, status=status.HTTP_401_UNAUTHORIZED)
+    order = Order.objects.filter(pk=pk).first()
+    if not order:
+        return Response({'error': 'Buyurtma topilmadi'}, status=status.HTTP_404_NOT_FOUND)
+    if order.customer.id != user_id:
+        return Response({'error': 'Siz faqat o‘z buyurtmangizni yangilashingiz mumkin'}, status=status.HTTP_403_FORBIDDEN)
+    data = request.data
+    dining_space_id = data.get('dining_space', order.dining_space.id)
+    start_time_str = data.get('start_time', order.start_time.strftime('%H:%M'))
+    end_time_str = data.get('end_time', order.end_time.strftime('%H:%M') if order.end_time else None)
+    def is_valid_time(time_str):
+        if not isinstance(time_str, str) or len(time_str) != 5 or time_str[2] != ':':
+            return False
+        hours, minutes = time_str.split(':')
+        if not (hours.isdigit() and minutes.isdigit()):
+            return False
+        hours, minutes = int(hours), int(minutes)
+        return 0 <= hours <= 23 and 0 <= minutes <= 59
+    if not is_valid_time(start_time_str):
+        return Response({'error': 'Noto‘g‘ri boshlanish vaqti formati. HH:MM shaklida kiriting'}, status=status.HTTP_400_BAD_REQUEST)
+    if end_time_str and not is_valid_time(end_time_str):
+        return Response({'error': 'Noto‘g‘ri tugash vaqti formati. HH:MM shaklida kiriting'}, status=status.HTTP_400_BAD_REQUEST)
+    start_hours, start_minutes = map(int, start_time_str.split(':'))
+    start_time = time(start_hours, start_minutes)
+    end_time = None
+    if end_time_str:
+        end_hours, end_minutes = map(int, end_time_str.split(':'))
+        end_time = time(end_hours, end_minutes)
+    dining_space = DiningSpace.objects.filter(id=dining_space_id).first()
+    if not dining_space:
+        return Response({'error': 'Dining space mavjud emas'}, status=status.HTTP_404_NOT_FOUND)
+    current_time = timezone.now().time()
+    if start_time < dining_space.restaurant.opening_time:
+        return Response({'error': f'Restoran {dining_space.restaurant.opening_time.strftime("%H:%M")} da ochiladi'}, status=status.HTTP_400_BAD_REQUEST)
+    if end_time and end_time > dining_space.restaurant.closing_time:
+        return Response({'error': f'Restoran {dining_space.restaurant.closing_time.strftime("%H:%M")} da yopiladi'}, status=status.HTTP_400_BAD_REQUEST)
+    if end_time and start_time > end_time:
+        return Response({'error': 'Boshlanish vaqti tugash vaqtidan keyin bo‘lishi mumkin emas'}, status=status.HTTP_400_BAD_REQUEST)
+    overlapping_orders = Order.objects.filter(
+        dining_space=dining_space,
+        start_time__lte=end_time if end_time else start_time,
+        end_time__gte=start_time,
+    ).exclude(id=order.id).distinct()
+    if overlapping_orders.exists():
+        time_ranges = [f"{o.start_time.strftime('%H:%M')} dan {o.end_time.strftime('%H:%M')} gacha" for o in overlapping_orders if o.end_time]
+        return Response({'error': f'Dining space quyidagi vaqt oralig‘larida band qilingan: {", ".join(time_ranges)}'}, status=status.HTTP_400_BAD_REQUEST)
+    serializer = OrderUpdateSerializer(order, data=data, partial=True)
+    if serializer.is_valid():
+        updated_order = serializer.save()
+        if start_time <= current_time <= (end_time if end_time else start_time):
+            dining_space.status = 0  # "load"
+        else:
+            dining_space.status = 1  # "there is"
+        dining_space.save()
+        return Response(serializer.data, status=status.HTTP_200_OK)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+@swagger_auto_schema(
+    method='DELETE',
+    responses={204: 'Buyurtma muvaffaqiyatli o‘chirildi'},
+    tags=['Order CRUD'],
+)
+@api_view(['DELETE'])
+def delete_order(request, pk):
+    user_id = getattr(request, 'user_id', None)
+    if not user_id:
+        return Response({'error': 'Foydalanuvchi ID topilmadi'}, status=status.HTTP_401_UNAUTHORIZED)
+    order = Order.objects.filter(pk=pk).first()
+    if not order:
+        return Response({'error': 'Buyurtma topilmadi'}, status=status.HTTP_404_NOT_FOUND)
+    if order.customer.id != user_id:
+        return Response({'error': 'Siz faqat o‘z buyurtmangizni o‘chirishingiz mumkin'}, status=status.HTTP_403_FORBIDDEN)
+    dining_space = order.dining_space
+    order.delete()
+    current_time = timezone.now().time()
+    overlapping_orders = Order.objects.filter(
+        dining_space=dining_space,
+        start_time__lte=current_time,
+        end_time__gte=current_time,
+    )
+    if overlapping_orders.exists():
+        dining_space.status = 0
+    else:
+        dining_space.status = 1
+    dining_space.save()
+    return Response({'message': 'Buyurtma muvaffaqiyatli o‘chirildi'}, status=status.HTTP_204_NO_CONTENT)
+
+@swagger_auto_schema(
+    method='GET',
+    responses={200: OrderSerializer(many=True)},
+    tags=['Order CRUD'],
+)
+@api_view(['GET'])
+def order_listt(request):
+    user_id = getattr(request, 'user_id', None)
+    if not user_id:
+        return Response({'error': 'Foydalanuvchi ID topilmadi'}, status=status.HTTP_401_UNAUTHORIZED)
+    orders = Order.objects.filter(customer_id=user_id)
+    if not orders.exists():
+        return Response({'message': 'Sizda mavjud buyurtmalar yo‘q'}, status=status.HTTP_200_OK)
+    serializer = OrderSerializer(orders, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)
+
+@swagger_auto_schema(
+    method='GET',
+    responses={200: OrderSerializer(many=True)},
+    tags=['Order CRUD'],
+)
+@api_view(['GET'])
+def order_list(request):
+    user_id = getattr(request, 'user_id', None)
+    if not user_id:
+        return Response({'error': 'Foydalanuvchi ID topilmadi'}, status=status.HTTP_401_UNAUTHORIZED)
+    orders = Order.objects.all()
+    if not orders.exists():
+        return Response({'message': 'Hozircha buyurtmalar yo‘q'}, status=status.HTTP_200_OK)
+    serializer = OrderSerializer(orders, many=True)
+    return Response(serializer.data, status=status.HTTP_200_OK)

@@ -26,8 +26,11 @@ Product_TYPE = (
 
 class Restaurant(models.Model):
     name = models.CharField(max_length=50)
-    opening_time = models.TimeField(default=time(8, 0))
-    closing_time = models.TimeField(default=time(0, 0))
+    opening_time = models.TimeField(default=time(7, 0))
+    closing_time = models.TimeField(default=time(23, 0))
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'Restaurant'
@@ -45,6 +48,9 @@ class DiningSpace(models.Model):
     type = models.IntegerField(choices=DiningSpace_TYPE, default=0)
     status = models.IntegerField(choices=STATUS, default=1)
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         db_table = 'Dining Space'
         verbose_name = 'Dining Space'
@@ -61,6 +67,9 @@ class Product(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0.00)
 
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
     class Meta:
         db_table = 'Products'
         verbose_name = 'Product'
@@ -73,9 +82,11 @@ class Product(models.Model):
 class Order(models.Model):
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
     dining_space = models.ForeignKey(DiningSpace, on_delete=models.SET_NULL, null=True, related_name='orders')
-    order_time = models.DateTimeField(auto_now_add=True)
     start_time = models.TimeField()
-    end_time = models.TimeField(blank=True, null=True) 
+    end_time = models.TimeField(blank=True, null=True)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'Orders'
@@ -83,7 +94,8 @@ class Order(models.Model):
         verbose_name_plural = 'Orders'
 
     def __str__(self):
-        return f"Order {self.id} by {self.customer.username} in {self.restaurant.name}"
+        restaurant_name = self.dining_space.restaurant.name if self.dining_space else "Noma'lum restoran"
+        return f"Order {self.id} by {self.customer.username} in {restaurant_name}"
 
 
 class OrderItem(models.Model):
@@ -91,6 +103,9 @@ class OrderItem(models.Model):
     product = models.ForeignKey(Product, on_delete=models.CASCADE, related_name='order_items') 
     quantity = models.PositiveIntegerField(default=1)
     comment = models.TextField()
+
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = 'Order Items'

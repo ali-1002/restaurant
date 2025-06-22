@@ -28,7 +28,6 @@ def registration(request):
         if serializers.is_valid():
             user = serializers.save()
             otp_code_new = random.randint(100000, 999999)
-            print(otp_code_new)
             send_telegram_message(BOT_TOKEN, CHAT_ID, otp_code_new)
             otp = Otp.objects.create(user=user, otp_code = otp_code_new)
             otp.save()
@@ -113,10 +112,7 @@ def login(request):
     user = User.objects.filter(username=username).first() or Admin.objects.filter(username=username).first()
     if not user:
         return Response({'error': 'Foydalanuvchi topilmadi yoki parol noto‘g‘ri'}, status=status.HTTP_401_UNAUTHORIZED)
-    print(user)
-    print(user.password)
-    print(make_password(password))
-    if user.password != make_password(password):
+    if user.password != password:
         return Response({'error': 'Foydalanuvchi topilmadi yoki parol noto‘g‘ri'}, status=status.HTTP_401_UNAUTHORIZED)
     refresh = RefreshToken.for_user(user)
     access = refresh.access_token
@@ -127,3 +123,114 @@ def login(request):
         'access_token': str(access),
         'refresh_token': str(refresh),
     }, status=status.HTTP_200_OK)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+@api_view(['PATCH'])
+# @permission_classes([IsAuthenticated])
+def chenge_password(request):
+    user = request.user
+    data = request.data
+
+    old_password = data.get("old_password")
+    new_password = data.get("new_password")
+
+    if not old_password or not new_password:
+        return Response({"error": "Both old and new passwords are required."}, status=400)
+
+    if not check_password(old_password, user.password):
+        return Response({"error": "Old password is incorrect."}, status=400)
+
+    user.set_password(new_password)
+    user.save()
+
+    return Response({"success": "Password updated successfully."}, status=200)
+
+
+@api_view(['POST'])
+def forgot_password(request):
+    data = request.data
+    username = data.get('username')
+
+    if not username:
+        return Response({"error": "Username is required"}, status=400)
+
+    user = User.objects.filter(username=username, is_verify=True).first()
+
+    if not user:
+        return Response({"error": "User not found or not verified"}, status=404)
+
+    otp_code_new = random.randint(10000, 99999)
+    otp = Otp.objects.create(user=user, otp_code=otp_code_new)
+    otp.save()
+    print(otp_code_new)
+
+    return Response({
+        "message": "OTP sent successfully",
+        "otp_key": str(otp.otp_key),
+    }, status=200)
+
+
+@api_view(['POST'])
+def update_password(request):
+    data = request.data
+    otp_key = data.get('otp_key')
+    new_password = data.get('new_password')
+
+    if not otp_key or not new_password:
+        return Response({"error": "OTP key, OTP code, and new password are required"}, status=400)
+
+    otp = Otp.objects.filter(otp_key=otp_key).first()
+
+    if not otp:
+        return Response({"error": "Invalid OTP key"}, status=400)
+
+    user = otp.user
+    user.set_password(new_password)
+    user.save()
+
+    otp.delete()
+
+    return Response({"message": "Password updated successfully"}, status=200)
+
+
+@api_view(['POST'])
+def verify_otp_key(request):
+    data = request.data
+    otp_key = data.get('otp_key')
+    otp_code = data.get('otp_code')
+
+    if not otp_key or not otp_code:
+        return Response({"error": "OTP key va OTP kod talab qilinadi"}, status=400)
+
+    otp = Otp.objects.filter(otp_key=otp_key).first()
+
+    if not otp:
+        return Response({"error": "Notog'ri OTP key"}, status=400)
+
+    if timezone.now() - otp.created_at > timedelta(seconds=60):
+        return Response({"error": "OTP muddati tugagan"}, status=400)
+
+    if otp.otp_code != otp_code:
+        return Response({"error": "Notog'ri OTP kod"}, status=400)
+
+    return Response({"otp_key": otp.otp_key}, status=200)
+
+
+@api_view(http_method_names=['GET'])
+def auth_me(request):
+    if not request.user.is_authenticated:
+        return Response(data={'error': "auth required"}, status=401)
+
+    return Response(data={'username': request.user.username, 'id': request.user.id})

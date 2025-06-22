@@ -14,7 +14,7 @@ class User(models.Model):
     last_name = models.CharField(max_length=100)
     phone_number = models.CharField(max_length=14)
     email = models.CharField(max_length=50)
-    role = models.CharField(default='staff')
+    role = models.CharField(default='user', max_length=20)
     is_verify = models.BooleanField(default=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
