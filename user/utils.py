@@ -1,9 +1,10 @@
 import requests
-# from celery import shared_task
-# from restaurant.models import Order
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
-BOT_TOKEN = "8060275874:AAHg_07UCPGTkVCcvuyjFpB6ZjcSeB9D4PU"
-CHAT_ID = 7186021574
+BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
+CHAT_ID = os.getenv("TELEGRAM_CHANNEL_ID")
 
 def send_telegram_message(BOT_TOKEN, CHAT_ID, otp_code_new):
     url = f"https://api.telegram.org/bot{BOT_TOKEN}/sendMessage"
