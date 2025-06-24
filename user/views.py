@@ -10,6 +10,7 @@ from django.utils import timezone
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.contrib.auth.hashers import make_password
 from .utils import send_telegram_message, BOT_TOKEN, CHAT_ID
+from django.contrib.auth.hashers import check_password
 
 
 @swagger_auto_schema(method='POST',
@@ -82,9 +83,7 @@ def login(request):
     username = request.data.get('username')
     password = request.data.get('password')
     user = User.objects.filter(username=username).first() or Admin.objects.filter(username=username).first()
-    if not user:
-        return Response({'error': 'Foydalanuvchi topilmadi yoki parol noto‘g‘ri'}, status=status.HTTP_401_UNAUTHORIZED)
-    if user.password != password:
+    if not user or not check_password(password, user.password):
         return Response({'error': 'Foydalanuvchi topilmadi yoki parol noto‘g‘ri'}, status=status.HTTP_401_UNAUTHORIZED)
     refresh = RefreshToken.for_user(user)
     access = refresh.access_token

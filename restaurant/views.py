@@ -12,7 +12,7 @@ from user.utils import send_telegram_messagee, CHAT_ID
 
 @swagger_auto_schema(method='POST',
                      request_body=RestaurantSerializer,
-                     responses={201: RestaurantSerializer},
+                     responses={201: "Restaurant muvoffaqqiyatli yaratildi"},
                      tags=['Restaurant CRUD'],
                      )
 @api_view(['POST'])
@@ -21,13 +21,13 @@ def create_restaurnat(request):
     serializer = RestaurantSerializer(data=data)
     if serializer.is_valid():
         serializer.save()
-        return Response({'message': "Restaurant muvofaqqiyatli yaratildi"}, status=status.HTTP_201_CREATED)
+        return Response({'message': "Restaurant muvoffaqqiyatli yaratildi"}, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
-@swagger_auto_schema(method='PUT',
+@swagger_auto_schema(method="PUT",
                      request_body=RestaurantSerializer,
-                     responses={201: RestaurantSerializer},
+                     responses={200: "Restaurant ma'lumotlari muvoffaqqiyatli yangilandi"},
                      tags=['Restaurant CRUD'],
                      )
 @api_view(['PUT'])
@@ -35,7 +35,7 @@ def update_restaurnat(request, pk):
     restaurant = Restaurant.objects.filter(pk=pk).first()
     if not restaurant:
         return Response({'error': 'Restaurant topilmadi'}, status=status.HTTP_404_NOT_FOUND)
-    serializer = RestaurantSerializer(restaurant, data=request.data)
+    serializer = RestaurantSerializer(restaurant, data=request.data, partial=True)
     if serializer.is_valid():
         serializer.save()
         return Response({'message': "Restaurant ma'lumotlari muvoffaqqiyatli yangilandi"}, status=status.HTTP_200_OK)
@@ -43,8 +43,7 @@ def update_restaurnat(request, pk):
 
 
 @swagger_auto_schema(method='DELETE',
-                     request_body=RestaurantSerializer,
-                     responses={201: RestaurantSerializer},
+                     responses={200: "Restaurant muvoffaqqiyatli o'chirildi"},
                      tags=['Restaurant CRUD'],
                      )
 @api_view(['DELETE'])
@@ -52,9 +51,8 @@ def delete_restaurnat(request, pk):
     restaurant = Restaurant.objects.filter(pk=pk).first()
     if not restaurant:
         return Response({'error': 'Restaurant topilmadi'}, status=status.HTTP_404_NOT_FOUND)
-    print(restaurant)
     restaurant.delete()
-    return Response({'message': "Restaurant muvoffaqqiyatli o'chirildi"}, status=status.HTTP_204_NO_CONTENT)
+    return Response({'message': "Restaurant muvoffaqqiyatli o'chirildi"}, status=status.HTTP_200_OK)
 
 
 @swagger_auto_schema(method='GET',
@@ -84,38 +82,37 @@ def detail_restaurnat(request, pk):
 
 @swagger_auto_schema(method='POST',
                      request_body=DiningSpaceSerializer,
-                     responses={201: DiningSpaceSerializer},
+                     responses={201: "Dining Space muvoffaqqiyatli yaratildi"},
                      tags=['DiningSpace CRUD'],
                      )
 @api_view(['POST'])
 def create_diningspace(request):
     data = request.data
-    serializer = RestaurantSerializer(data=data)
+    serializer = DiningSpaceSerializer(data=data)
     if serializer.is_valid():
         serializer.save()
-        return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response({'message': "Dining Space muvoffaqqiyatli yaratildi"}, status=status.HTTP_201_CREATED)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @swagger_auto_schema(method='PUT',
                      request_body=DiningSpaceSerializer,
-                     responses={201: DiningSpaceSerializer},
+                     responses={200: "Dining Space ma'lumotlari muvoffaqqiyatli yangilandi"},
                      tags=['DiningSpace CRUD'],
                      )
 @api_view(['PUT'])
 def update_diningspace(request, pk):
-    restaurant = Restaurant.objects.filter(pk=pk).first()
-    if not restaurant:
+    diningspace = DiningSpace.objects.filter(pk=pk).first()
+    if not diningspace:
         return Response({'error': 'Dining Space topilmadi'}, status=status.HTTP_404_NOT_FOUND)
-    serializer = DiningSpaceSerializer(restaurant, data=request.data)
+    serializer = DiningSpaceSerializer(diningspace, data=request.data, partial=True)
     if serializer.is_valid():
         serializer.save()
-        return Response({'message': "Restaurant ma'lumotlari muvoffaqqiyatli yangilandi"}, status=status.HTTP_201_CREATED)
+        return Response({'message': "Dining Space ma'lumotlari muvoffaqqiyatli yangilandi"}, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 
 @swagger_auto_schema(method='DELETE',
-                     request_body=DiningSpaceSerializer,
-                     responses={201: DiningSpaceSerializer},
+                     responses={200: "Dining Space muvoffaqqiyatli o'chirildi"},
                      tags=['DiningSpace CRUD'],
                      )
 @api_view(['DELETE'])
@@ -124,12 +121,13 @@ def delete_diningspace(request, pk):
     if not diningspace:
         return Response({'error': 'Dining Space topilmadi'}, status=status.HTTP_404_NOT_FOUND)
     diningspace.delete()
-    return Response({'message': "Dining Space muvaffaqqiyatli o'chirildi"}, status=status.HTTP_204_NO_CONTENT)
+    return Response({'message': "Dining Space muvaffaqqiyatli o'chirildi"}, status=status.HTTP_200_OK)
 
 
 @swagger_auto_schema(method='GET',
                      responses={200: DiningSpaceSerializer(many=True)},
                      tags=['DiningSpace CRUD'],
+                     operation_description="0-ID Stollar\n1-ID Kabinalar"
                      )
 @api_view(['GET'])
 def listt_diningspace(request, **kwargs):
@@ -149,6 +147,7 @@ def listt_diningspace(request, **kwargs):
 @swagger_auto_schema(method='GET',
                      responses={200: DiningSpaceSerializer(many=True)},
                      tags=['DiningSpace CRUD'],
+                     operation_description="0-ID Stollar\n1-ID Kabinalar"
                      )
 @api_view(['GET'])
 def list_diningspace(request, **kwargs):
@@ -175,7 +174,7 @@ def detail_diningspace(request, pk):
 
 @swagger_auto_schema(method='POST',
                      request_body=ProductSerializer,
-                     responses={201: ProductSerializer,},
+                     responses={201: "Product muvoffaqqiyatli yaratildi"},
                      tags=['Product CRUD'],
                      )
 @api_view(['POST'])
@@ -189,23 +188,22 @@ def create_product(request):
 
 @swagger_auto_schema(method='PUT',
                      request_body=ProductSerializer,
-                     responses={201: ProductSerializer},
+                     responses={200: "Product ma'lumotlari muvoffaqqiyatli yangilandi"},
                      tags=['Product CRUD'],
                      )
 @api_view(['PUT'])
 def update_product(request, pk):
-    product = DiningSpace.objects.filter(pk=pk).first()
+    product = Product.objects.filter(pk=pk).first()
     if not product:
         return Response({'error': 'Product topilmadi'}, status=status.HTTP_404_NOT_FOUND)
     serializer = ProductSerializer(product, data=request.data)
     if serializer.is_valid():
         serializer.save()
-        return Response({'message': "Product ma'lumotlari muvofaqqiyatli yangilandi"}, status=status.HTTP_201_CREATED)
+        return Response({'message': "Product ma'lumotlari muvofaqqiyatli yangilandi"}, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @swagger_auto_schema(method='DELETE',
-                     request_body=ProductSerializer,
-                     responses={201: ProductSerializer(many=True)},
+                     responses={200: "Product muvoffaqqiyatli o'chirildi"},
                      tags=['Product CRUD'],
                      )
 @api_view(['DELETE'])
@@ -214,7 +212,7 @@ def delete_product(request, pk):
     if not product:
         return Response({'error': 'Product topilmadi'}, status=status.HTTP_404_NOT_FOUND)
     product.delete()
-    return Response({'message': "Product muvaffaqqiyatli o'chirildi"}, status=status.HTTP_204_NO_CONTENT)
+    return Response({'message': "Product muvaffaqqiyatli o'chirildi"}, status=status.HTTP_200_OK)
 
 
 @swagger_auto_schema(method='GET',
@@ -232,10 +230,20 @@ def detail_product(request, pk):
 @swagger_auto_schema(method='GET',
                      responses={200: ProductSerializer(many=True)},
                      tags=['Product CRUD'],
+                     operation_description="1-ID Taomlar\n2-ID Ichimliklar\n3-ID Shirinliklar\n4-ID Salatlar"
                      )
 @api_view(['GET'])
-def list_product(request):
-    products = Product.objects.all()
+def list_product(request, pk):
+    if not (pk in [1, 2, 3, 4]):
+        return Response({'error': "Bu idga tegishli ma'lumotlar mavjud emas"}, status=status.HTTP_404_NOT_FOUND)
+    if pk == 1:
+        products = Product.objects.filter(type=1).values('id', 'name', 'price', 'type')
+    if pk == 2:
+        products = Product.objects.filter(type=2).values('id', 'name', 'price', 'type')
+    if pk == 3:
+        products = Product.objects.filter(type=3).values('id', 'name', 'price', 'type')
+    if pk == 4:
+        products = Product.objects.filter(type=4).values('id', 'name', 'price', 'type')
     if not products:
         return Response({'error': 'Product topilmadi'}, status=status.HTTP_404_NOT_FOUND)
     serializer = ProductSerializer(products, many=True)

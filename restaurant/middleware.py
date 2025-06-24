@@ -46,25 +46,24 @@ class CRUDMiddleware(MiddlewareMixin):
         if error_response:
             return error_response
         role = get_role(token)
-        print(role)
         if role == 'admin':
-            if path[2] == 'restaurant' or path[3] == 'create':
+            if path[2] == 'restaurant' and path[3] == 'create':
                 return create_restaurnat(request, *view_args, **view_kwargs)
-            if path[2] == 'restaurant' or path[3] == 'update':
+            if path[2] == 'restaurant' and path[3] == 'update':
                 return update_restaurnat(request, *view_args, **view_kwargs)
-            if path[2] == 'restaurant' or path[3] == 'delete':
+            if path[2] == 'restaurant' and path[3] == 'delete':
                 return delete_restaurnat(request, *view_args, **view_kwargs)
-            if path[2] == 'product' or path[3] == 'create':
+            if path[2] == 'product' and path[3] == 'create':
                 return create_product(request, *view_args, **view_kwargs)
-            if path[2] == 'product' or path[3] == 'update':
+            if path[2] == 'product' and path[3] == 'update':
                 return update_product(request, *view_args, **view_kwargs)
-            if path[2] == 'product' or path[3] == 'delete':
+            if path[2] == 'product' and path[3] == 'delete':
                 return delete_product(request, *view_args, **view_kwargs)
-            if path[2] == 'diningspace' or path[3] == 'create':
+            if path[2] == 'diningspace' and path[3] == 'create':
                 return create_diningspace(request, *view_args, **view_kwargs)
-            if path[2] == 'diningspace' or path[3] == 'update':
+            if path[2] == 'diningspace' and path[3] == 'update':
                 return update_diningspace(request, *view_args, **view_kwargs)
-            if path[2] == 'diningspace' or path[3] == 'delete':
+            if path[2] == 'diningspace' and path[3] == 'delete':
                 return delete_diningspace(request, *view_args, **view_kwargs)
             return None
         return JsonResponse({"error": f"Siz {path[2]}ni {path[3]} qila olmaysiz"}, status=401)
