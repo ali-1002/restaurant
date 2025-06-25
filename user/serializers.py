@@ -11,11 +11,23 @@ class OTPSerializer(serializers.ModelSerializer):
         model = Otp
         fields = ['id', 'otp_key', 'otp_code']
 
-class ResendOTPSerializer(serializers.ModelSerializer):
+class ResendOTPSerializer(serializers.Serializer):
     class Meta:
         model = Otp
         fields = ['id', 'otp_key']
 
+class ChangePasswordSerializer(serializers.Serializer):
+    old_password = serializers.CharField(write_only=True)
+    new_password = serializers.CharField(write_only=True)
+
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
     password = serializers.CharField(required=True, write_only=True)
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    username = serializers.CharField(required=True)
+    new_password = serializers.CharField(required=True, write_only=True)
+
+class UpdatePasswordSerializer(serializers.Serializer):
+    otp_key = serializers.CharField(required=True)
+    otp_code = serializers.IntegerField(required=True)

@@ -1,6 +1,8 @@
 import json
+from django.urls import reverse
 from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
+from user.views import chenge_password
 from .validate_token import get_role, get_user_id
 from .views import (create_restaurnat, listt_diningspace, list_diningspace, update_restaurnat, delete_restaurnat,
                     create_product, update_product, delete_product, create_diningspace, update_diningspace,
@@ -138,4 +140,13 @@ class OrderItemCrudMiddleware(MiddlewareMixin):
         return None
 
 
-
+class ChangePasswordMiddleware(MiddlewareMixin):
+    def process_view(self, request, view_func, view_args, view_kwargs):
+        if request.path != reverse('chenge_password'):
+            return None
+        error_response, data, token = validate_request(request)
+        if error_response:
+            return error_response
+        user_id = get_user_id(token)
+        request.user_id = user_id
+        return chenge_password(request, *view_args, **view_kwargs)

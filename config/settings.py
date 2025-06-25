@@ -50,6 +50,7 @@ MIDDLEWARE = [
     'restaurant.middleware.ListDiningSpaceMiddleware',
     'restaurant.middleware.OrderCrudMiddleware',
     'restaurant.middleware.OrderItemCrudMiddleware',
+    'restaurant.middleware.ChangePasswordMiddleware',
 ]
 
 ROOT_URLCONF = 'config.urls'

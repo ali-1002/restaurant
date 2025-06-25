@@ -293,7 +293,7 @@ def create_order(request):
     if end_time_str:
         end_hours, end_minutes = map(int, end_time_str.split(':'))
         end_time = time(end_hours, end_minutes)
-    current_time = timezone.now().time()  # Asia/Tashkent vaqtida (USE_TZ = False)
+    current_time = timezone.now().time()
     if start_time < restaurant.opening_time:
         return Response({'xato': f'Restoran {restaurant.opening_time.strftime("%H:%M")} da ochiladi'}, status=status.HTTP_400_BAD_REQUEST)
     if end_time and end_time > restaurant.closing_time:
@@ -399,9 +399,9 @@ def update_order(request, pk):
     if serializer.is_valid():
         updated_order = serializer.save()
         if start_time <= current_time <= (end_time if end_time else start_time):
-            dining_space.status = 0  # "load"
+            dining_space.status = 0
         else:
-            dining_space.status = 1  # "there is"
+            dining_space.status = 1
         dining_space.save()
         return Response(serializer.data, status=status.HTTP_200_OK)
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)

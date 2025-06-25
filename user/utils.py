@@ -11,7 +11,7 @@ def send_telegram_message(BOT_TOKEN, CHAT_ID, otp_code_new):
     data = {
         'chat_id': CHAT_ID,
         'text': f"OTP code: {otp_code_new}",
-        'parse_mode': 'HTML'  # or 'Markdown'
+        'parse_mode': 'HTML'
     }
     response = requests.post(url, data=data)
     return response.json()
