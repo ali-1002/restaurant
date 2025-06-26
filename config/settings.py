@@ -53,6 +53,9 @@ MIDDLEWARE = [
     'restaurant.middleware.ChangePasswordMiddleware',
 ]
 
+CSRF_TRUSTED_ORIGINS = ['https://alijon.anonymous.uz']
+
+
 ROOT_URLCONF = 'config.urls'
 
 TEMPLATES = [

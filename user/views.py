@@ -187,20 +187,16 @@ def chenge_password(request):
 def forgot_password(request):
     data = request.data
     username = data.get('username')
-    new_password = data.get('new_password')
     if not username:
         return Response({"error": "Foydalanuvchi nomi talab qilinadi"}, status=status.HTTP_400_BAD_REQUEST)
-    if not new_password:
-        return Response({'error': 'Foydalanuvchi new password talab qiladi'}, status=status.HTTP_400_BAD_REQUEST)
     user = User.objects.filter(username=username, is_verify=True).first()
     if not user:
         return Response({"error": "Foydalanuvchi topilmadi yoki tasdiqlanmagan"}, status=status.HTTP_404_NOT_FOUND)
-    otp_code_new = random.randint(100000, 999999)
+    otp_code_new = random.randint(10000, 99999)
     otp = Otp.objects.create(user=user, otp_code=otp_code_new)
     otp.save()
     send_telegram_message(BOT_TOKEN, CHAT_ID, otp_code_new)
     return Response({"otp_key": str(otp.otp_key)}, status=status.HTTP_200_OK)
-
 
 @swagger_auto_schema(method='POST',
                      request_body=UpdatePasswordSerializer,
@@ -213,12 +209,14 @@ def update_password(request):
     data = request.data
     otp_key = data.get('otp_key')
     otp_code = data.get('otp_code')
-    if not otp_key or not otp_code:
-        return Response({"error": "OTP key va OTP kod talab qilinadi"}, status=status.HTTP_400_BAD_REQUEST)
+    new_password = data.get('new_password')
+    if not otp_key or not new_password or not otp_code:
+        return Response({"error": "OTP key va OTP kod va new password talab qilinadi"}, status=status.HTTP_400_BAD_REQUEST)
     otp = Otp.objects.filter(otp_key=otp_key, otp_code=otp_code).first()
     if not otp:
-        return Response({"error": "Noto‘g‘ri OTP"}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"error": "Noto‘g‘ri OTP"}, status=400)
     user = otp.user
+    user.password  = make_password(new_password)
     user.save()
     otp.delete()
     return Response({"message": "Parol muvaffaqiyatli yangilandi"}, status=status.HTTP_200_OK)

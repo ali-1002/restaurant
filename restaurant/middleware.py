@@ -100,12 +100,6 @@ class OrderCrudMiddleware(MiddlewareMixin):
         request.user_id = user_id
         request.user_role = role
         if role == 'user':
-            if path[2] == 'create':
-                return create_order(request, *view_args, **view_kwargs)
-            if path[2] == 'update':
-                return update_order(request, *view_args, **view_kwargs)
-            if path[2] == 'delete':
-                return delete_order(request, *view_args, **view_kwargs)
             if path[2] == 'list':
                 return order_listt(request, *view_args, **view_kwargs)
         if role == 'admin':
@@ -126,12 +120,6 @@ class OrderItemCrudMiddleware(MiddlewareMixin):
         request.user_id = user_id
         request.user_role = role
         if role == 'user':
-            if path[2] == 'create':
-                return create_order_item(request, *view_args, **view_kwargs)
-            if path[2] == 'update':
-                return update_order_item(request, *view_args, **view_kwargs)
-            if path[2] == 'delete':
-                return delete_order_item(request, *view_args, **view_kwargs)
             if path[2] == 'list':
                 return list_order_items(request, *view_args, **view_kwargs)
         if role == 'admin':

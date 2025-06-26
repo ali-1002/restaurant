@@ -26,8 +26,8 @@ class LoginSerializer(serializers.Serializer):
 
 class ForgotPasswordSerializer(serializers.Serializer):
     username = serializers.CharField(required=True)
-    new_password = serializers.CharField(required=True, write_only=True)
 
 class UpdatePasswordSerializer(serializers.Serializer):
+    new_password = serializers.CharField(required=True, write_only=True)
     otp_key = serializers.CharField(required=True)
     otp_code = serializers.IntegerField(required=True)
