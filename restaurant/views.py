@@ -9,6 +9,7 @@ from user.models import User
 from drf_yasg.utils import swagger_auto_schema
 from .models import Restaurant, DiningSpace, Product, Order, OrderItem
 from django.utils import timezone
+from django.utils.timezone import is_aware, make_aware, get_current_timezone
 from user.utils import send_telegram_messagee, CHAT_ID
 
 @swagger_auto_schema(method='POST',
@@ -135,7 +136,6 @@ def listt_diningspace(request, **kwargs):
     pk = kwargs['pk']
     user_id = getattr(request, 'user_id', None)
     userr = User.objects.filter(id=user_id).values('id', 'username', 'first_name', 'last_name', 'password').first()
-    print(userr)
     if not(pk in [0, 1]):
         return Response({"error": "Bu ID larda ma'lumot mavjud  emas"})
     diningspaces = DiningSpace.objects.filter(status=1, type=kwargs['pk'])
@@ -267,77 +267,89 @@ def create_order(request):
         return Response({'error': 'Foydalanuvchi mavjud emas'}, status=status.HTTP_404_NOT_FOUND)
     data = request.data
     dining_space_id = data.get('dining_space')
+    start_date_str = data.get('start_date')
     start_time_str = data.get('start_time')
+    end_date_str = data.get('end_date')
     end_time_str = data.get('end_time')
-    if not dining_space_id or not start_time_str:
-        return Response({'error': 'Dining space ID va boshlanish vaqti kiritilishi shart'}, status=status.HTTP_400_BAD_REQUEST)
-    if not DiningSpace.objects.filter(id=dining_space_id).exists():
+    if not all([dining_space_id, start_date_str, start_time_str, end_date_str, end_time_str]):
+        return Response({
+            'error': 'Dining space ID, boshlanish sanasi, boshlanish vaqti, tugash sanasi va tugash vaqti kiritilishi shart'
+        }, status=status.HTTP_400_BAD_REQUEST)
+    dining_space = DiningSpace.objects.filter(id=dining_space_id).first()
+    if not dining_space:
         return Response({'error': 'Dining space mavjud emas'}, status=status.HTTP_404_NOT_FOUND)
-    dining_space = DiningSpace.objects.get(id=dining_space_id)
     restaurant = dining_space.restaurant
-    def is_valid_time(time_str):
-        if not isinstance(time_str, str) or len(time_str) != 5 or time_str[2] != ':':
-            return False
-        hours, minutes = time_str.split(':')
-        if not (hours.isdigit() and minutes.isdigit()):
-            return False
-        hours, minutes = int(hours), int(minutes)
-        return 0 <= hours <= 23 and 0 <= minutes <= 59
-    if not is_valid_time(start_time_str):
-        return Response({'error': 'Noto‘g‘ri boshlanish vaqti formati. HH:MM shaklida kiriting'}, status=status.HTTP_400_BAD_REQUEST)
-    if end_time_str and not is_valid_time(end_time_str):
-        return Response({'error': 'Noto‘g‘ri tugash vaqti formati. HH:MM shaklida kiriting'}, status=status.HTTP_400_BAD_REQUEST)
-    start_hours, start_minutes = map(int, start_time_str.split(':'))
-    start_time = time(start_hours, start_minutes)
-    end_time = None
-    if end_time_str:
+    try:
+        start_date = datetime.strptime(start_date_str, '%Y-%m-%d').date()
+        end_date = datetime.strptime(end_date_str, '%Y-%m-%d').date()
+        start_hours, start_minutes = map(int, start_time_str.split(':'))
         end_hours, end_minutes = map(int, end_time_str.split(':'))
+        start_time = time(start_hours, start_minutes)
         end_time = time(end_hours, end_minutes)
-    current_time = timezone.now().time()
-    if start_time < restaurant.opening_time:
-        return Response({'error': f'Restoran {restaurant.opening_time.strftime("%H:%M")} da ochiladi'}, status=status.HTTP_400_BAD_REQUEST)
-    if end_time and end_time > restaurant.closing_time:
-        return Response({'error': f'Restoran {restaurant.closing_time.strftime("%H:%M")} da yopiladi'}, status=status.HTTP_400_BAD_REQUEST)
-    if end_time and start_time > end_time:
+    except ValueError:
+        return Response({'error': 'Sanalar va vaqtlar noto‘g‘ri formatda kiritilgan'}, status=status.HTTP_400_BAD_REQUEST)
+    current_datetime = timezone.now()
+    current_date = current_datetime.date()
+    if start_date < current_date:
+        return Response({'error': 'Boshlanish sanasi o‘tmishda bo‘lishi mumkin emas'}, status=status.HTTP_400_BAD_REQUEST)
+    if end_date < start_date:
+        return Response({'error': 'Tugash sanasi boshlanish sanasidan oldin bo‘lishi mumkin emas'}, status=status.HTTP_400_BAD_REQUEST)
+    if start_date == current_date and datetime.combine(start_date, start_time) < current_datetime:
+        return Response({'error': f'Boshlanish vaqti joriy vaqtdan ({current_datetime.strftime("%H:%M")}) oldin bo‘lishi mumkin emas'}, status=status.HTTP_400_BAD_REQUEST)
+    if start_time < restaurant.opening_time or end_time > restaurant.closing_time:
+        return Response({'error': f'Restoran ish vaqti {restaurant.opening_time.strftime("%H:%M")} - {restaurant.closing_time.strftime("%H:%M")} orasida'}, status=status.HTTP_400_BAD_REQUEST)
+    start_datetime = timezone.make_aware(datetime.combine(start_date, start_time), timezone.get_current_timezone())
+    end_datetime = timezone.make_aware(datetime.combine(end_date, end_time), timezone.get_current_timezone())
+    if start_datetime > end_datetime:
         return Response({'error': 'Boshlanish vaqti tugash vaqtidan keyin bo‘lishi mumkin emas'}, status=status.HTTP_400_BAD_REQUEST)
-    if start_time < current_time:
-        return Response({'error': f'Boshlanish vaqti joriy vaqtdan ({current_time.strftime("%H:%M")}) oldin bo‘lishi mumkin emas'}, status=status.HTTP_400_BAD_REQUEST)
     overlapping_orders = Order.objects.filter(
         dining_space=dining_space,
-        start_time__lte=end_time if end_time else start_time,
-        end_time__gte=max(start_time, current_time)
-    ).distinct()
+        start_date__lte=end_date,
+        end_date__gte=start_date,
+        start_time__lte=end_time,
+        end_time__gte=start_time
+    )
     if overlapping_orders.exists():
-        time_ranges = [f"{order.start_time.strftime('%H:%M')} dan {order.end_time.strftime('%H:%M')} gacha" for order in overlapping_orders if order.end_time]
+        time_ranges = [
+            f"{order.start_date} {order.start_time.strftime('%H:%M')} dan {order.end_date} {order.end_time.strftime('%H:%M')} gacha"
+            for order in overlapping_orders
+        ]
         return Response({'error': f'Dining space quyidagi vaqt oralig‘larida band qilingan: {", ".join(time_ranges)}'}, status=status.HTTP_400_BAD_REQUEST)
     order_data = {
         'customer': customer.id,
         'dining_space': dining_space.id,
+        'start_date': start_date,
+        'end_date': end_date,
         'start_time': start_time,
         'end_time': end_time
     }
     serializer = OrderSerializer(data=order_data)
     if serializer.is_valid():
         order = serializer.save()
-        if start_time <= current_time <= (end_time if end_time else start_time):
-            dining_space.status = 0
+        if not is_aware(current_datetime):
+            current_datetime = make_aware(current_datetime, timezone.get_current_timezone())
+        if not is_aware(start_datetime):
+            start_datetime = make_aware(start_datetime, timezone.get_current_timezone())
+        if not is_aware(end_datetime):
+            end_datetime = make_aware(end_datetime, timezone.get_current_timezone())
+        if start_datetime <= current_datetime <= end_datetime:
+            dining_space.status = 0  # Band
         else:
-            dining_space.status = 1
-        dining_space.save()
-        time_range = f"{start_time.strftime('%H:%M')}"
-        if end_time:
-            time_range += f" dan {end_time.strftime('%H:%M')} gacha"
+            dining_space.status = 1  # Bo‘sh
+        dining_space.save(update_fields=['status'])
+        time_range = f"{start_date} {start_time.strftime('%H:%M')} dan {end_date} {end_time.strftime('%H:%M')} gacha"
         user_message = (
             f"Hurmatli {customer.first_name} {customer.last_name}, "
             f"siz {time_range} vaqt oralig‘ida restoran joyini buyurtma qildingiz."
         )
-        send_telegram_messagee(CHAT_ID, user_message)
         admin_message = (
             f"ADMIN: {customer.first_name} {customer.last_name} tomonidan "
             f"{time_range} vaqt oralig‘ida zakas qilindi."
         )
+        send_telegram_messagee(CHAT_ID, user_message)
         send_telegram_messagee(CHAT_ID, admin_message)
-    return Response(serializer.data, status=status.HTTP_201_CREATED)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+    return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 @swagger_auto_schema(
     method='PUT',
@@ -355,12 +367,10 @@ def update_order(request, pk):
     if order.customer.id != user_id:
         return Response({'error': 'Siz faqat o‘z buyurtmangizni yangilashingiz mumkin'},
                         status=status.HTTP_403_FORBIDDEN)
-
     data = request.data
     dining_space_id = data.get('dining_space', order.dining_space.id)
     start_time_str = data.get('start_time', order.start_time.strftime('%H:%M'))
     end_time_str = data.get('end_time', order.end_time.strftime('%H:%M') if order.end_time else None)
-
     def is_valid_time_format(time_str):
         if not isinstance(time_str, str) or len(time_str) != 5 or time_str[2] != ':':
             return False
@@ -369,23 +379,19 @@ def update_order(request, pk):
             return False
         hours, minutes = int(hours), int(minutes)
         return 0 <= hours <= 23 and 0 <= minutes <= 59
-
     if not is_valid_time_format(start_time_str):
         return Response({'error': 'Noto‘g‘ri boshlanish vaqti formati. HH:MM shaklida kiriting'},
                         status=status.HTTP_400_BAD_REQUEST)
     if end_time_str and not is_valid_time_format(end_time_str):
         return Response({'error': 'Noto‘g‘ri tugash vaqti formati. HH:MM shaklida kiriting'},
                         status=status.HTTP_400_BAD_REQUEST)
-
     start_hours, start_minutes = map(int, start_time_str.split(':'))
     start_time = time(start_hours, start_minutes)
     end_time = None
     if end_time_str:
         end_hours, end_minutes = map(int, end_time_str.split(':'))
         end_time = time(end_hours, end_minutes)
-
     dining_space = get_object_or_404(DiningSpace, id=dining_space_id)
-
     if start_time < dining_space.restaurant.opening_time:
         return Response({'error': f'Restoran {dining_space.restaurant.opening_time.strftime("%H:%M")} da ochiladi'},
                         status=status.HTTP_400_BAD_REQUEST)
@@ -395,13 +401,11 @@ def update_order(request, pk):
     if end_time and start_time > end_time:
         return Response({'error': 'Boshlanish vaqti tugash vaqtidan keyin bo‘lishi mumkin emas'},
                         status=status.HTTP_400_BAD_REQUEST)
-
     overlapping_orders = Order.objects.filter(
         dining_space=dining_space,
         start_time__lte=end_time if end_time else start_time,
         end_time__gte=start_time,
     ).exclude(id=order.id).distinct()
-
     if overlapping_orders.exists():
         time_ranges = [
             f"{o.start_time.strftime('%H:%M')} dan {o.end_time.strftime('%H:%M')} gacha"
@@ -409,35 +413,28 @@ def update_order(request, pk):
         ]
         return Response({'error': f'Dining space quyidagi vaqt oralig‘larida band qilingan: {", ".join(time_ranges)}'},
                         status=status.HTTP_400_BAD_REQUEST)
-
     serializer = OrderUpdateSerializer(order, data=data, partial=True)
     if serializer.is_valid():
         updated_order = serializer.save()
-
         current_time = timezone.now().time()
         if start_time <= current_time <= (end_time if end_time else start_time):
             dining_space.status = 0
         else:
             dining_space.status = 1
         dining_space.save()
-
         customer = order.customer
         time_range = f"{start_time.strftime('%H:%M')} - {end_time.strftime('%H:%M')}" if end_time else f"{start_time.strftime('%H:%M')}"
-
         user_message = (
             f"Hurmatli {customer.first_name} {customer.last_name}, "
             f"siz{time_range} vaqt oralig‘iga restoran joyini o'zgartirdingiz."
         )
         send_telegram_messagee(CHAT_ID, user_message)
-
         admin_message = (
             f"ADMIN: {customer.first_name} {customer.last_name} tomonidan "
             f"{order.id}-IDli buyurtmani {time_range} vaqt oralig‘iga o'zgartirdi."
         )
         send_telegram_messagee(CHAT_ID, admin_message)
-
         return Response(serializer.data, status=status.HTTP_200_OK)
-
     return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
 

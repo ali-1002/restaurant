@@ -82,7 +82,9 @@ class Product(models.Model):
 class Order(models.Model):
     customer = models.ForeignKey(User, on_delete=models.CASCADE, related_name='orders')
     dining_space = models.ForeignKey(DiningSpace, on_delete=models.SET_NULL, null=True, related_name='orders')
-    start_time = models.TimeField()
+    start_date = models.DateField(null=True)
+    start_time = models.TimeField(null=True)
+    end_date = models.DateField(null=True)
     end_time = models.TimeField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)

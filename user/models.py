@@ -13,7 +13,7 @@ class User(models.Model):
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
     phone_number = models.CharField(max_length=14)
-    email = models.CharField(max_length=50)
+    email = models.EmailField(unique=True, null=True)
     role = models.CharField(default='user', max_length=20)
     is_verify = models.BooleanField(default=False)
 

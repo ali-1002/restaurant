@@ -81,7 +81,6 @@ class ListDiningSpaceMiddleware(MiddlewareMixin):
             return error_response
         role = get_role(token)
         user_id = get_user_id(token)
-        print(role)
         request.user_id = user_id
         if role == 'admin':
             return list_diningspace(request, *view_args, **view_kwargs)

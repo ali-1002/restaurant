@@ -23,7 +23,7 @@ class ProductSerializer(serializers.ModelSerializer):
 class OrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = Order
-        fields = ['id', 'customer', 'dining_space', 'start_time', 'end_time']
+        fields = ['id', 'customer', 'dining_space', 'start_date', 'start_time', 'end_date', 'end_time']
 
 class OrderUpdateSerializer(serializers.ModelSerializer):
     class Meta:
